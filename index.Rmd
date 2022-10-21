@@ -1,0 +1,728 @@
+---
+title: "ETC5521-Exploratory data analysis, Semester 2 (2021): Assignment 1"
+subtitle: "CEO departure in S&P (Standard & Poor's) 1500 firms: An Analysis"
+author:
+  - [Qin Xu]
+  - [Raunak Bhivpathaki]
+  - [Pian Li]
+  - [Nishtha Arora]
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+        base_format: rmdformats::readthedown
+        keep_md: yes
+---
+[This assignment is for ETC5521 Assignment 1 by Team `r rmarkdown::metadata$team` comprising of `r knitr::combine_words(rmarkdown::metadata$author)`.]{style="color:#006DAE;"}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE)
+```
+
+\section*{PART A: NISHTHA-Intro/Motivation, Data Desc, data exploration, data collection}
+
+# Introduction and motivation
+
+The chief executive officers (CEO's) and the management team play a vital role for the performance of the company as they provide strategic decisions that directs company in the direction of success. However, since the beginning of the early 1980s, there has been a series of studies that have argued that the effect of “CEO” has been largely over estimated [12].  
+
+In order to understand the CEO succession phenomena deeply, we carry an analysis involving CEO dismissals, their departure reasons, year of dismissal and more.The data set used for the analysis, is an open source data set which includes records for reasons of CEO departures in S&P 1500 firms from 1980 to 2021.
+
+In order to carry out the analysis, we will answer the following **research questions**:
+
+- What is the most popular reason of CEO departure from 1987 to 2020 ?
+
+- Compare and contrast involuntary and voluntary CEO departures.
+
+- How many CEO with higher experience left companies from 1987 to 2020? Guess which company is more attractive.
+
+- Give details of the CEO's for the company which has had maximum CEO's over the years.
+
+- Has the no. of CEO departures increased over the years?
+
+# Data description
+
+```{r loading_libraries}
+library(bookdown)
+library(rmdformats)
+library(knitr)
+library(lubridate)
+library(tibble)
+library(here)
+library(readr)
+library(tidyverse)
+library(ggResidpanel)
+library(kableExtra)
+library(plotly)
+library(visdat)
+library(skimr)
+library(DataExplorer) 
+library(readxl)
+library(ggpubr)
+```
+
+## Source of the data
+
+```{r reading_data}
+departures <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-27/departures.csv')
+```
+
+The data set has been extracted from [TidyTuesday-RforDataScience github](https://github.com/rfordatascience/tidytuesday/blob/master/data/2021/2021-04-27) which further has been taken from Gentry et al.'s article available at [Wiley Online Library](https://onlinelibrary.wiley.com/doi/abs/10.1002/smj.3278). The original data source for the article is [*zenodo.org*](https://zenodo.org/record/4543893#.YUIAey0Rq9Y), which is a  data center hub and contains open data sources for research.
+
+## Structure of the data
+
+The data set contains the data for CEO details, their name, company name, year of departure, year of serving and dismissal reasons. The number of rows in the data set are `r nrow(departures)` and the number of columns are `r ncol(departures)`. The list of variable names with their description are mentioned below in Table 2.1:
+
+### Variable description and datatypes
+
+```{r}
+data_dictionary <- read_excel("Data_dictionary .xlsx", sheet = 1) %>% head(19)
+
+knitr::kable ( data_dictionary ,caption = "Data Dictonary") %>% 
+  kable_styling(latex_options = c("striped", "hold_position")) %>% 
+  kable_paper("hover", full_width = F) %>% 
+  scroll_box(width = "100%", height = "300px") 
+```
+
+The *departure code* is a *double/numeric* variable and hence, is a numeric digit (code value). The description for each digit is depicted below in Table 2.2:
+
+```{r}
+ceo_departure_code<- read_excel("Data_dictionary .xlsx", sheet = 2)
+knitr::kable (ceo_departure_code ,caption = "CEO Departure Code Description ") %>% 
+  kable_styling(latex_options = c("striped", "hold_position")) %>% 
+  kable_paper("hover", full_width = F) %>% 
+  scroll_box(width = "100%", height = "300px") 
+
+```
+
+# Data Exploration
+
+## Finding Outliers and Duplicates
+
+```{r unique, include=FALSE}
+dup <- departures %>% 
+  subset(duplicated (departures ))
+
+unique <- unique(departures [ , 1:19 ] )
+```
+
+After sub-setting the duplicate rows from the original data using R, it was found out that **there are 0 duplicate data entries**.
+
+Further we find outliers in the time variables of the data set.
+
+```{r out, fig.cap="Finding outliers in fyear_gone"}
+ggplot(departures, aes(sample = fyear_gone)) +
+  geom_qq() + geom_qq_line(color = "red")+
+  ylab("fyear_gone")
+```
+
+Figure \@ref(fig:out) shows that there is an outlier in the *fyear_gone* column i.e. showing a year '2997' which is not possible as the present year is '2021'. This needs to be removed.
+
+```{r outt, fig.cap="Finding outliers in fyear"}
+ggplot(departures, aes(sample = fyear)) +
+  geom_qq() + geom_qq_line(color = "red")+
+  ylab("fyear")
+```
+
+Though figure \@ref(fig:outt) is not symmetrical but no outliers are detected here. The *fyear* variable ranges from 1987 to 2020, which is possible and correct.
+
+## Variable Description (after correction)
+
+```{r}
+find_id <- departures %>% 
+  filter(fyear_gone == "2997" )
+clean <- departures %>% 
+  filter(dismissal_dataset_id != "1400")
+```
+
+The outlier found in figure \@ref(fig:out) is corrected i.e. the row with the year "2997" is removed and a cleaned data set is formed.
+
+### Variable datatypes visualization
+
+```{r variable_datatypes, include=FALSE}
+l <- str(clean)
+```
+
+All the variables are in the correct data types which are displayed below in \@ref(fig:viz):
+
+```{r viz, fig.cap="Visualization for variable types"}
+vis_dat(clean)+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_fill_brewer(palette="Set1")
+```
+It is observed that most of the variables are of numeric type. Most amount of NULL values are found in character type variables. The exact percentage of missing values for each variable is shown below in \@ref(fig:plot):
+
+```{r plot, fig.cap="Missing values in Variables"}
+plot_missing(clean)
+```
+*These missing values will be removed for the analysis as and when required.*
+
+## Checking the data quality
+
+The quality of the data set is checked using the *Skim* function in R. Below displayed is the summary of the data set, the no. of variables for each data type, missing, unique, minimum and maximum values for each variable and their mean and standard deviation (sd).
+
+```{r skim, echo=FALSE}
+skimr::skim(clean)
+```
+
+In the figure below i.e.\@ref(fig:hist) , histograms for each variable is displayed.
+
+```{r hist, fig.cap="Variable values districution"}
+plot_histogram(clean, binary_as_factor = TRUE,
+  geom_histogram_args = list(bins = 60L),
+  scale_x = "continuous",
+  title = NULL,
+  ggtheme = theme_gray(),
+  theme_config = list(),
+  nrow = 3L,
+  ncol = 3L,
+  parallel = FALSE
+)
+```
+The histograms show depict the range of values/skewness of values for each variable, for example, the histogram *gvkey* is left skewed.
+
+## Time frame of collection
+
+**The \@ref(fig:boxplot) shows the time frame for the date of departure(fyear_gone) of the CEO.** 
+
+```{r boxplot, fig.cap="Time frame for CEO departure event "}
+time <- clean %>% 
+  mutate(month=month(leftofc))
+boxplot(month ~ fyear_gone,
+data= time,
+main="Different boxplots for dates",
+ylab="month",
+xlab="fyear_gone",
+col="pink",
+border="brown"
+)
+```
+We see that the data set has a single data value at 1980 and numerous values from 1988 to 2021. 
+
+**The \@ref(fig:time) shows the time frame for the year when the event took place (fyear).**
+
+```{r time, fig.cap="Time frame for event occurence (CEO dismissal)"}
+ggplot(clean, aes(x = fyear)) +
+  geom_histogram(aes(y = stat(density)), color = "black", binwidth = 2, fill="#DAF7A6") +
+   geom_density(color = "#4500F7", size = 1.3,
+bw = 1.5)
+```
+It is seen that the data is collected from 1987 to 2020, with single data in 1987 and 2020 and numerous data rows for the years from 1992 to 2019.
+
+Therefore, overall we can say that the data has been collected from **1980 to 2021**
+
+# Data Collection Method
+
+- The data was collected by  by Richard J. Gentry, Joseph S. Harrison, Steven Boivie and Timothy J, as a part of their research on the CEO turnover and their dismissals in S&P firms [5].
+
+- This data was collected from a range of different news coverage and SEC filings (Financial Statement submitted to Securities and Exchange Commission) from the web and university libraries.
+
+- Then the data was then coded by paid undergraduate students in a computer lab under the direct supervision of two strategy PhD students at a major university in the southeastern United States.
+
+- During th COVID-19 pandemic, the process of data coding was through a data collection company outside of the United States as in-person coding was not possible due to restriction in the United States. 
+
+# Analysis
+
+*(Please use PLOTLY (click on the region/plot/shape) to get more information about the plots/figures in the report further from here)*
+
+\section*{PART B: PIAN- Q1, Q2, Q3(new question by Pian)}
+
+## What is the most popular reason of CEO departure from 1987 to 2020 ?
+
+The variables, "Departure code" and "Dismissal," are used to analyze the reasons for CEO departure and generate data insights, then compare the proportion of each type of dismissal for companies from S&P 1500.   
+
+```{r plot1, fig.cap="The reasons for CEO departures"}
+dismissal <-  clean %>% 
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("1","2","3","4","5","6","7","8")) %>% 
+  group_by(departure_code) %>% 
+  count(sort = TRUE) %>% 
+  rename(number = n) %>% 
+  mutate(departure_code = as.factor(departure_code)) %>% 
+  mutate(Dismissal = recode(departure_code,"1" = "death",
+                                           "2" = "Illness",
+                                           "3" = "Job performance",
+                                           "4" = "legal violations or concerns",                                                                    "5" = "CEO retired",
+                                           "6" = "New opportunity",
+                                           "7" = "Other",
+                                           "8" = "Missing"
+                                           )) %>% 
+    relocate(number,.after = Dismissal)
+ total <- 3598 + 2132 + 1320 + 195 + 183 + 97 + 84 +53
+ 
+ new <- dismissal %>% summarise( proportion = round(sum(number/ total*100),2)) %>% 
+  left_join( y =  dismissal, by = 
+               "departure_code") %>% 
+    relocate(proportion,.after = number ) %>% 
+   arrange(desc(number)) %>%
+   rename("Departure code" = departure_code,
+          Count = number,
+          Proportion = proportion)
+ plot <- ggplot(data = dismissal, 
+                      aes(x = reorder(Dismissal, number),
+                          y = number,
+                          fill = Dismissal)) +
+geom_bar(stat="identity",position ="dodge") +
+   scale_fill_brewer(palette = "Pastel2")+
+  labs(x = "Dismissal reasons", y = "Count") +
+  geom_text(aes(label = number), vjust =2, colour = "black", size = 2.2) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1), 
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(colour = "grey", linetype = "dotted"))
+
+p <- ggplotly(plot)
+p
+```
+- Figure \@ref(fig:plot1) shows that the **primary reason for CEO departure is CEO retirement** (accounting for 47% of CEO departures). 
+
+- From this, **an interesting finding** is that *the top three reasons for CEO departures (CEO retirement, Other, and job performances) were accounted for over 92% of the total number of CEO departures from 1987 to 2020, which suggest that within S&P 1500 companies, CEO departures are primarily due to the age of CEO.*
+
+**Comparing distribution of the top 3 CEO departures** 
+
+Figure \@ref(fig:plot1) shows that the top three reasons for CEO departure (CEO retirement, Other, and job performances) accounted for over 90% of the total CEO departure in S&P companies from 1987 to 1990. *Therefore, the change of the three dismissal reasons will be shown in the following graph.*
+
+```{r den, fig.cap = "Top 3 CEO departure resaon distribution form 1990 to 2020"}
+distribution<- clean %>% 
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("3","5","7")) %>% 
+  mutate(departure_code = as.factor(departure_code)) %>% 
+  mutate(Dismissal = recode(departure_code,"3" = "Job performance",                                                                  "5" = "CEO retired",
+                                           "7" = "Other" )) 
+distribution_plot <- ggplot(data = distribution, 
+                      aes(x = fyear,
+                          fill = Dismissal)) +
+  geom_density(alpha = 0.4)+
+  facet_grid(Dismissal ~ . ) +
+  labs(x = "Fiscal year", y = "Density") +
+  theme_bw()
+
+fig <- ggplotly(distribution_plot)
+fig
+```
+
+- From \@ref(fig:den), we see that all three types of dismissal show a similar multi-modal distribution. These types of CEO dismissal distribution all have three peaks. **The peaks occur around 1998, 2007, and 2015 for CEO retirement, 2000, 2007, 2015 for job performance, and 1997,2005,2015 for Other reasons**.
+
+
+- Furthermore, the distribution explains the peak of CEO departure for job performance in 2007. also, other reasons could be potentially due to the burst of the housing market in the US (global financial crisis), which negatively impacted companies and CEO job performance globally, thus leading to the surge in the number of CEO departures during that time (2008).  
+
+**The growth rate of different types of reasons for CEO departure**
+
+After comparing the proportion of each type of CEO departures, for a deeper insight into the different CEO departures, it is essential to explore **the rate of increase** for different types of CEO departures across early 1990 to 2020 (using 1993 and 2017 for the analysis).  
+
+```{r growthrate}
+Rate_data <- clean %>%
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("1","2","3","4","5","7")) %>% 
+  group_by(departure_code, fyear) %>% 
+  count()
+  
+rate_table1 <- Rate_data %>% 
+  filter (fyear == "1993" | fyear == "2017" ) %>% 
+   mutate(Dismissal = recode(departure_code,"1" = "death",
+                                           "2" = "Illness",
+                                           "3" = "Job performance",
+                                           "4" = "legal violations or concerns",                                                           "5" = "CEO retired",
+                                           "6" = "New opportunity",
+                                           "7" = "Other",
+                                           "8" = "Missing",
+                                           "9" = "Execucomp error")) 
+  rate_table2 <- rate_table1 %>% 
+  pivot_wider(names_from = fyear, values_from = n) %>%
+  mutate(`2017` = as.double(`2017`),
+         `1993` = as.double(`1993`)) %>%
+  mutate(Increase_rate = round((`2017` - `1993`) / `1993` * 100, 2)) %>%
+  arrange(desc(Increase_rate)) %>%
+  rename("Departure code" = departure_code,
+         "Growth rate" = Increase_rate)
+  
+knitr::kable ( rate_table2 ,caption = "The growth rate for different reasons of CEO departures") %>% kable_styling(latex_options = c("striped", "hold_position")) %>% kable_paper("hover", full_width = F) %>%
+  column_spec(1:4, bold = T) %>%
+  row_spec(1, bold = T, color = "white", background = "steelblue") %>% 
+  scroll_box(width = "100%", height = "300px") 
+
+```
+- An interesting finding here is that the three less common CEO dismissal reasons, illness, legal violations or concerns, and death are the top three types of CEO departure in terms of the growth rate from 1993 to 2017. 
+
+- An explanation for this could be that the number of CEO departures for illness, legal violations or concerns, and death in 1993 was negligible. In 1993 number of CEO departures due to illness was 1. Even if it was to increase 6 in 2017 (still significantly small in terms of the number of departures for CEO retirement in 2017), it is a 300% increase. In contrast, the rate of increase for CEO retirement is low (16.7%), which indicates only a slight increase in the number of S&P 500 company CEOs that left the company in 2017 due to retirement compared to CEO retirement in 1993. 
+
+From the above analysis, it can be concluded that **the primary CEO dismissal is CEO retirement followed by other reasons and job performance (17.2%)**. All three types of CEO dismissals share a similar characteristic in terms of their distribution. However, when comparing the rate of increase, CEO retirement, job performance, and others are relatively low, which indicates that the CEO departure in 1993 to 2017 remains relatively steady.
+
+## Compare and contrast involuntary and voluntary CEO departures 
+
+This section will compare and analyze the involuntary and voluntary reasons for CEO departures between 1987 to 2020 for S&P 1500 companies.
+
+```{r involuntary}
+voluntary <-  clean %>% 
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("5","6")) %>% 
+  group_by(fyear) %>% 
+  count(sort = TRUE) %>% 
+  rename(number = n ) %>% 
+  arrange((fyear)) 
+
+involuntary <-  clean %>% 
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("1","2","3","4")) %>% 
+  group_by(fyear) %>% 
+  count(sort = TRUE) %>% 
+  rename(number = n ) %>% 
+  arrange((fyear))  
+
+```
+
+```{r}
+summary1 <-  clean %>% 
+  select ("dismissal_dataset_id",
+          "coname",
+          "fyear",
+          "exec_fullname",
+          "departure_code",
+          "ceo_dismissal"
+          ) %>% 
+  filter (departure_code %in% c("1","2","3","4","5","6")) %>% 
+  group_by(departure_code) %>% 
+  count(sort = TRUE) 
+summary_proportion<- summary1 %>% 
+  summarise(proportion =  n/ total*100) %>% 
+    mutate(Dismissal = recode(departure_code,"1" = "Involuntary-death",
+                                             "2" = "Involuntary-Illness",
+                                             "3" = "Involuntary-Job Performance",
+                                             "4" = "Involuntary-legal violations or concerns",                                   "5" = "Voluntary-CEO retired",
+                                             "6" = "Voluntary-New opportunity")) %>% 
+  relocate(proportion,.after = Dismissal)
+v_total <- sum(summary1$n)
+```
+
+```{r}
+vector1 <- c("involuntary")
+vector2 <- c("voluntary")
+involuntary_1<-data.frame(Type = vector1, involuntary)
+voluntary_1<-data.frame(Type = vector2, voluntary)
+combine_df<- rbind(involuntary_1,voluntary_1)
+average_vol <- combine_df %>%
+  filter(Type == "voluntary") %>%
+  summarise(total = sum(number),
+            average = round(sum(total/(2019-1987)),2)) %>%
+  rename(Total = total,
+         Average = average) 
+
+average_invol <- combine_df %>%
+  filter(Type == "involuntary") %>%
+  summarise(total = sum(number),
+            average = round(sum(total/(2020-1992)),2)) %>%
+  rename(Total = total,
+         Average = average)
+
+type <- c("voluntary","involuntary")
+
+new_average <- rbind(average_vol,average_invol) 
+
+new_a <- add_column(new_average, Type = c("voluntary","involuntary"), .before = "Total")
+
+knitr::kable (new_a,caption = "The average annual CEO turnover from 1987 to 2020") %>% kable_styling(latex_options = c("striped", "hold_position")) %>% 
+  kable_paper("hover") %>%
+  column_spec(1:3, bold = T) %>%
+  scroll_box(width = "100%", height = "300px") 
+
+```
+
+- The table shows that involuntary causes are responsible for 1696 CEO departures in the S&P 1500 company, while voluntary reasons are relatively higher with 3781 CEO departures from 1987 to 2020. 
+
+- In addition, the average number of **voluntary CEO departures** is 119 per year, which is also **significantly higher than involuntary CEO departure** (55 per year).
+
+Another figure \@ref(fig:line) is shows to display the trend of voluntary and involuntary CEO departures from the year 1987 to 2020.
+
+```{r line, fig.cap = "The number of involuntary and voluntary CEO departure from 187 to 2020"}
+
+iv_plot <- ggplot(data = combine_df, 
+                      aes(x = fyear,
+                          y= number,
+                          )) +
+  geom_line(aes(color = Type), size = 0.5) +
+  theme_light() +
+  labs(x = "Fiscal year",
+       y = "Number")
+
+ivplotly<- ggplotly((iv_plot))
+ivplotly
+
+```
+- Here, it is evident that voluntary departures top involuntary departures by a decent margin. The first voluntary departure was in 1987, when only one such departure was reported, whereas the first involuntary departure was in 1992 when 11 instances were reported.
+
+*Voluntary Departures are instances when the CEO decides to step down from the position of his/her own will. It may happen due to the factors of retiring, disagreements over company decisions and policies, or personal reasons like illness or old age. Overall, it can be said that Voluntary Departures are not always due to any misconduct or mistake from the CEO's end.*
+
+*Involuntary Departures are instances when the CEO is fired by the company or due to the CEO's death. A CEO may get fired for a variety of reasons like misconduct or harassment at the workplace, poor performance of the CEO, working against the company's interests or going against company policies, etc. Involuntary Departures are generally considered bad for the CEO.*
+
+Therefore, figure \@ref(fig:line) concludes that the highest number of voluntary departures were reported in 1999, where a total of 185 CEOs stepped down. On the other hand, the highest number of involuntary departures were reported in the year 2000, where 88 CEOs stepped down from their role. 
+
+However, **the year with the overall most number of CEO departures is 2007, where 265 CEOs stepped down**. It also may be because 2007 was the start of the Global Depression, which had hit corporations badly. 
+
+Further analysis of the graph tells us that the number of CEO departures is declining, particularly sharply after 2018.
+
+## How many CEO with higher experience left companies from 1987 to 2020? Guess which company is more attractive.
+
+It is possible that people have more experience if they hold the same position more than once. This section talks about the number of experienced CEO's who serve more than or equal to 2 times from 1987 to 2020.
+
+```{r}
+overall_tenure <- clean %>%
+  select(coname, max_tenure_ceodb) %>%
+  filter(max_tenure_ceodb %in% (2:4)) %>%
+  count(coname) %>%
+  rename("Number of experienced CEOs" = n,
+         "Company name" = coname) %>%
+  arrange(-`Number of experienced CEOs`) %>%
+  head(10)
+  
+each_tenure <- clean %>%
+  select(coname, max_tenure_ceodb) %>%
+  filter(max_tenure_ceodb %in% (2:4)) %>%
+  group_by(coname, max_tenure_ceodb) %>%
+  count(max_tenure_ceodb) %>%
+  rename("Count" = n,
+         "Company name" = coname,
+         "Times(serve as CEO)" = max_tenure_ceodb) 
+knitr::kable(overall_tenure, caption = "Total number of experienced CEO for each company") %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  kable_paper("hover",full_width = F) %>%
+  column_spec(1:2, bold = T) %>%
+  row_spec(1:2, bold = T, color = "white", background = "steelblue") %>% 
+    scroll_box(width = "100%", height = "300px") 
+
+```
+The table above shows the total number of CEOs who serve as CEO greater than or equal to two times. It is obvious that _CONVERSANT INC_ and _STEWART INFORMATION SERVICES_ both have the highest total number of experienced CEOs who left the companies, which is five people. 
+
+
+Below the \@ref(fig:bar) shows the counted number of CEOs' departures from different corporations, including how many times they served as CEOs. We will compare the eight companies that have a higher number of experienced CEOs.
+
+```{r bar, fig.cap="Experienced CEO's vs Company"}
+top_10_tenure <- each_tenure %>%
+  filter(`Company name` %in% c("PHOTRONICS INC", 
+                               "AGCO CORP",
+                               "ANALOGIC CORP",
+                               "CONVERSANT INC",
+                               "FORD MOTOR CO",
+                               "POWELL INDUSTRIES INC",
+                               "STEWART INFORMATION SERVICES",
+                               "TREDEGAR CORP")) 
+
+bar <- top_10_tenure %>%
+  mutate(`Times(serve as CEO)` = as.character(`Times(serve as CEO)`)) %>%
+  ggplot(aes(x = `Company name`, y = Count, fill = `Times(serve as CEO)`)) +
+  geom_bar(stat = "identity", colour = "black") +
+  geom_text(aes(label = Count), position = position_stack(vjust = 0.5)) +
+  theme(legend.position = "bottom",
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(colour = "grey", linetype = "dotted")) +
+  scale_y_continuous(breaks = c(0,3,6,9)) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Blues") +
+  labs(y = "Number of experienced CEOs") 
+
+ggplotly(bar) 
+
+```
+
+From Table 3.3, the two companies with the highest total number of experienced CEOs, _CONVERSANT INC_ and _STEWART INFORMATION SERVICES_, have three people who worked as CEO three times already, and two people are worked as CEOs two times. Furthermore, PHOTRONICS INC has more experienced CEOs, four people working as CEO four times already. 
+
+Therefore, based on table 3.3 and \@ref(fig:bar) above, another guess is that companies with more experienced CEOs potentially reflect the company's development. Generally, more powerful companies can attract more experienced people. In this case, it is possible to conclude that _PHOTRONICS INC_ is more attractive for more experienced CEOs. Additionally, the treatment for those important positions in the firm should be improved to retain talents.
+
+\section*{PART C: NISHTHA- Q4, Q5(newQues by Nishtha), limitation}
+
+## Give details of the CEO's for the company which has had maximum CEO's over the years.
+
+**Finding company with most CEO's**
+
+```{r ques, fig.cap="Top 7 Companies with most no. of CEO's"}
+Q3 <- clean %>% 
+  select(coname, exec_fullname) %>% 
+  group_by(coname) %>% 
+  mutate(total_no_of_ceos = n()) %>% 
+  arrange(desc(total_no_of_ceos)) %>% 
+  count(sort = TRUE) %>% 
+  rename(total_no_of_ceos = "n") %>% 
+  head(7)
+ggplot(Q3, aes(x=coname, y=total_no_of_ceos)) +
+  geom_segment( aes(x=coname, xend=coname, y=0, yend=total_no_of_ceos)) +
+  geom_point( size=7, color="#AD2706", fill=alpha("#FF971D", 0.3), alpha=0.7, shape=21, stroke=2) +
+  geom_text(aes(label = total_no_of_ceos), vjust = -0.3, size = 4.5) +
+  scale_y_continuous() +
+  theme(axis.text.x = element_text(angle=40, hjust=1)) +
+  labs(x = "Company Name", y = "Total no of CEOs") +
+  scale_x_discrete(limits = c("SEARS HOLDINGS CORP", "GREAT ELM CAPITAL GROUP INC", "BARRICK GOLD CORP", "FORD MOTOR CO", "NTN BUZZTIME INC", "PHOTRONICS INC", "BIOLASE INC")) +
+  theme(plot.background = element_rect(fill = "white"))+
+  theme(panel.background = element_rect(fill = "#DAF7A6",
+                                colour = "black",
+                                size = 0.5, linetype = "solid"))
+```
+
+
+From  \@ref(fig:ques), we see that **SEARS HOLDINGS CORP** has the most number of CEO over the years i.e. 11 CEO's. 
+
+**Dismissal history of Sears Holdings Corp. CEO's**
+
+Table 3.2 displays the list of 11 CEO executives of the Sears Holding Corp along with their Reason of Dismissal.
+
+```{r}
+sears <- clean %>% 
+  select(coname, fyear, fyear_gone, exec_fullname, ceo_dismissal, departure_code, tenure_no_ceodb) %>% 
+  filter(coname == "SEARS HOLDINGS CORP") %>% 
+  mutate(departure_code = as.factor((departure_code))) %>% 
+  mutate(Reason_of_Dismissal = recode(departure_code, "3" = "Job performance",
+                                      "4" = "Legal violations",
+                                      "5" = "CEO retired",
+                                      "7" = "Due to merger, acquisition or other reasons",
+                                      "8" = "Unknown reason",
+                                      "9" = "	Execucomp error")) %>% 
+  select(-c(coname, ceo_dismissal)) %>% 
+  arrange(fyear) 
+
+knitr::kable(sears ,caption = "CEO Dismissal history of the Sears Holdings Corp.") %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  kable_paper("hover",full_width = F) %>%
+    scroll_box(width = "100%", height = "300px") 
+  
+```
+
+*In the table 3.2, the fyear_gone (year of CEO departure) for 'Aylwin B. Lewis' is displayed as 'NA' as the data is missing. But this value cannot be omitted as all the other variables are necessary for the analysis. Also, by observing tha table, it is likely that the missing value is '2004 or 2005' as the next CEO, Alan J. Lacy joined in 2005.*
+
+```{r, include=FALSE}
+count <- sears %>% 
+  select(Reason_of_Dismissal, tenure_no_ceodb) %>% 
+           group_by(tenure_no_ceodb, Reason_of_Dismissal) %>% 
+  count()
+```
+
+Observation for Table 3.2:
+
+- It is observed that, most of the dismissals (4 out of 11) are due to *Job performance* . Out of these 4, 1 CEO has had one previous experience each.
+
+- This displays a poor research of background of the candidate and poor judgment of human resource, by the recruitment team.
+
+## Has the no. of CEO departures increased over the years?
+
+The below plot shows a correlation between the year of departures and no. of departures over the years.
+
+```{r figg, fig.cap="Year with maximum CEO departures"}
+Q5 <- clean %>% 
+  group_by(fyear) %>% 
+  summarise(count= n()) %>% 
+  arrange(desc(count)) %>% 
+  rename(Year = "fyear") %>% 
+  rename(No._of_departures = "count") 
+
+ggscatter(Q5, x = "Year", y = "No._of_departures",
+          add = "reg.line", conf.int = TRUE,
+          cor.coef = TRUE, cor.method = "pearson",
+  xlab = "Year of departures",
+  ylab = "No. of departures")+
+  theme_pubr()+
+  scale_x_continuous(labels = scales::comma) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  geom_point(alpha = 0.4)
+```
+Observation from figure \@ref(fig:figg):
+
+- Here the R value i.e. the correlation coefficient is 0.45. This shows that is a moderate (on the weak side) positive linear. 
+
+- This means that as the years pass by, the CEO departures have increased in numbers but the increase is not rapid and is happening slowly.
+
+# Limitation
+
+-	Due to limitation of the data set: The small sample size collected was small and hence, this might have lead to less accurate results,  impacting the final finding for the analysis. 
+
+-	CEO departures were coded manually. This might have generated coding errors, leading to incorrect conclusions
+
+# Conclusion
+
+\section*{PART D: PIAN-  Result 1}
+
+- From 1987 to 2020, the **top 3 reasons for CEO dismissals account for 92%** of the total reasons which are *job performance*, *CEO retirement* and *others*. Maximum departures due to retirement happened in 1998 and due to job performance , happened in 2000.
+
+- There are **more voluntary departures than involuntary departures**, which means that more significant number of CEO's stepped down on their own will by retiring, switching companies, or due to disagreements with the company and its policies. 
+
+- The company _PHOTRONICS INC_ has more experienced CEO's departures who served as CEO four times. Besides, the _CONVERSANT INC_ and _STEWART INFORMATION SERVICES_ have the highest total number of experienced CEO's departures, including two and three times of being CEO's.
+
+\section*{PART E: NISHTHA-  Result 2}
+
+- **The maximum no. of CEO changeovers have happened in SEARS HOLDINGS CORP**. There were total of **11 dismissals** of CEO's and most of them were due to job performance.
+
+- As the years pass by, the no. of CEO departures have increased slowly. And **maximum no. of departures have happened in 2020**.
+
+\section*{PART F: PIAN AND NISHTHA-References}
+
+# References
+
+[1] Alboukadel Kassambara (2020). ggpubr: 'ggplot2' Based Publication Ready Plots. R package
+version 0.4.0. https://CRAN.R-project.org/package=ggpubr
+
+[2] C. Sievert. Interactive Web-Based Data Visualization with R, plotly, and shiny. Chapman and Hall/CRC Florida, 2020.
+
+[3] Elin Waring, Michael Quinn, Amelia McNamara, Eduardo Arino de la Rubia, Hao
+Zhu and Shannon Ellis (2021). skimr: Compact and Flexible Summaries of Data.
+R package version 2.1.3. https://CRAN.R-project.org/package=skimr
+
+[4] Garrett Grolemund, Hadley Wickham (2011). Dates and Times Made Easy with
+lubridate. Journal of Statistical Software, 40(3), 1-25. URL https://www.jstatsoft.org/v40/i03/.
+
+[5] Gentry et al (2021). A database of CEO turnover and dismissal in S&P 1500 firms, 2000–2018. https://onlinelibrary.wiley.com/
+https://onlinelibrary.wiley.com/doi/abs/10.1002/smj.3278
+
+[6] Hadley Wickham and Jim Hester (2020). readr: Read Rectangular Text Data. R
+package version 1.4.0. https://CRAN.R-project.org/package=readr
+
+[7] Hadley Wickham and Jennifer Bryan (2019). readxl: Read Excel Files. R package
+version 1.3.1. https://CRAN.R-project.org/package=readxl
+  
+[8] Hao Zhu (2021). kableExtra: Construct Complex Table with 'kable' and Pipe
+Syntax. R package version 1.3.4.
+https://CRAN.R-project.org/package=kableExtra
+
+[9] Julien Barnier (2021). rmdformats: HTML Output Formats and Templates for
+'rmarkdown' Documents. R package version 1.0.2.
+https://CRAN.R-project.org/package=rmdformats
+
+[10] Silge, J. (2019, July 1). Reordering and facetting for ggplot2. Julia Silge. https://juliasilge.com/blog/reorder-within/
+
+[11] Singer-Vine, J. (2021). Data Is Plural — 2021.04.21 edition. Data-is-plural.com.
+https://www.data-is-plural.com/archive/2021-04-21-edition/.
+
+[12] tidytuesday/readme.md at master · rfordatascience/tidytuesday. (n.d.). GitHub. Retrieved August 27, 2021, from https://github.com/rfordatascience/tidytuesday/blob/master/data/2021/2021-04-27/readme.md
+
+[13] Tierney N (2017). “visdat: Visualising Whole Data Frames.” _JOSS_, *2*(16),
+355. doi: 10.21105/joss.00355 (URL: https://doi.org/10.21105/joss.00355), <URL:
+http://dx.doi.org/10.21105/joss.00355>
+
+[14] Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source
+Software, 4(43), 1686, https://doi.org/10.21105/joss.01686
+  
+[15] Yihui Xie (2016). bookdown: Authoring Books and Technical Documents with R Markdown. Chapman and Hall/CRC.
+ISBN 978-1138700109
+
