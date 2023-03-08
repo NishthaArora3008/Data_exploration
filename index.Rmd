@@ -10,7 +10,7 @@ date: "`r Sys.Date()`"
 output:
   bookdown::html_document2:
         base_format: rmdformats::readthedown
-        keep_md: yes
+        keep_md: no
 ---
 [This assignment is for ETC5521 Assignment 1 by Team `r rmarkdown::metadata$team` comprising of `r knitr::combine_words(rmarkdown::metadata$author)`.]{style="color:#006DAE;"}
 
